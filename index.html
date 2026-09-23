@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Система параметрической оценки совместимости</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              100: '#ede9fe',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              700: '#6d28d9',
+            },
+            accent: {
+              teal: '#14b8a6',
+              amber: '#f59e0b',
+              rose: '#f43f5e'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Chart.js for radar and bar visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Custom subtle scrollbar & transitions */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    input[type=range] {
+      accent-color: #8b5cf6;
+    }
+    @media print {
+      body {
+        background: white !important;
+        color: black !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-card {
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: none !important;
+        background: white !important;
+        color: #0f172a !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen antialiased flex flex-col selection:bg-brand-600 selection:text-white">
+
+  <!-- Main Top Bar -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-semibold tracking-tight text-white flex items-center gap-2">
+            Parametric Match Matrix
+            <span class="text-xs bg-slate-800 text-brand-400 px-2 py-0.5 rounded-full border border-brand-500/30 font-mono">v2.4 Pro</span>
+          </h1>
+          <p class="text-xs text-slate-400">Система беспристрастной оценки долгосрочной совместимости</p>
+        </div>
+      </div>
+
+      <!-- Quick Demo Presets & Controls -->
+      <div class="flex items-center gap-2">
+        <div class="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 mr-2">
+          <span>Пресеты:</span>
+          <button onclick="loadPreset('ideal')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition border border-slate-700/60">
+            Идеал
+          </button>
+          <button onclick="loadPreset('risky')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-rose-300 transition border border-slate-700/60">
+            Сомнительная
+          </button>
+          <button onclick="resetAllData()" class="px-2 py-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition">
+            Сброс
+          </button>
+        </div>
+        <button onclick="openProfilesModal()" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-700/40 hover:bg-indigo-900/60 transition flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          Профили (<span id="savedCountBadge">0</span>)
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 w-full flex-grow space-y-6">
+
+    <!-- Candidate Meta Input Strip -->
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shadow-xl">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 flex-grow">
+        <label class="text-xs font-medium uppercase tracking-wider text-slate-400">Профиль:</label>
+        <div class="relative flex-grow max-w-sm">
+          <input 
+            type="text" 
+            id="candidateName" 
+            placeholder="Имя или псевдоним кандидатки..." 
+            value="Кандидатка А."
+            class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition"
+            oninput="triggerAutoCalc()"
+          />
+        </div>
+        <div class="text-xs text-slate-400">
+          Срок знакомства:
+          <select id="datingStage" onchange="toggleStageMultiplier(); triggerAutoCalc();" class="ml-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500">
+            <option value="early">Ранний этап (1–3 свидания)</option>
+            <option value="dynamic" selected>Отношения (1–3 месяца общения)</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- Live Indicator Score pill -->
+      <div class="flex items-center justify-end space-x-3">
+        <div class="text-right">
+          <span class="text-[11px] uppercase tracking-wider text-slate-400 block">Живой скоринг</span>
+          <span id="headerLiveScore" class="text-xl font-black font-mono text-brand-400">0.00</span>
+        </div>
+        <div id="headerStatusBadge" class="px-3 py-1 text-xs font-semibold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+          Оценивается
+        </div>
+      </div>
+    </div>
+
+    <!-- Stepper Navigation -->
+    <nav class="flex items-center justify-between gap-2 overflow-x-auto pb-2 border-b border-slate-800/80 text-xs sm:text-sm font-medium">
+      <button onclick="goToStep(0)" id="stepBtn-0" class="step-btn flex items-center gap-2 px-3.5 py-2 rounded-xl transition whitespace-nowrap bg-brand-600/20 text-brand-300 border border-brand-500/40">
+        <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-brand-500 text-white">0</span>
+        Стоп-факторы
+      </button>
+      <button onclick="goToStep(1)" id="stepBtn-1" class="step-btn flex items-center gap-2 px-3.5 py-2 rounded-xl transition whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent">
+        <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-slate-800 text-slate-300">1</span>
+        Базовый скоринг (5 сфер)
+      </button>
+      <button onclick="goToStep(2)" id="stepBtn-2" class="step-btn flex items-center gap-2 px-3.5 py-2 rounded-xl transition whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent">
+        <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-slate-800 text-slate-300">2</span>
+        Динамика (Мультипликаторы)
+      </button>
+      <button onclick="goToStep(3)" id="stepBtn-3" class="step-btn flex items-center gap-2 px-3.5 py-2 rounded-xl transition whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent">
+        <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold bg-slate-800 text-slate-300">3</span>
+        Дашборд и Вердикт
+      </button>
+    </nav>
+
+    <!-- STEP 0: Dealbreakers -->
+    <section id="step-0" class="step-content space-y-5">
+      <div class="bg-gradient-to-br from-slate-900 to-slate-900/60 border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-800/80 pb-4 mb-5">
+          <div>
+            <h2 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+              <span class="text-rose-400">⛔</span> Блок 0: Бинарные стоп-факторы (Dealbreakers)
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-400 mt-1">
+              Критерии абсолютного отсева. Если хотя бы один пункт равен «НЕТ», математическая модель обнуляет результат ($S=0$).
+            </p>
+          </div>
+          <span class="text-xs px-2.5 py-1 rounded bg-rose-950/70 border border-rose-800/60 text-rose-300 font-mono">
+            Множитель 0 / 1
+          </span>
+        </div>
+
+        <!-- Dealbreaker warning banner -->
+        <div id="dealbreakerAlert" class="hidden p-4 rounded-xl bg-rose-950/80 border border-rose-600 text-rose-200 text-sm mb-6 animate-pulse">
+          <div class="flex items-center gap-2 font-semibold">
+            <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            STOP: Сработал критический стоп-фактор несовместимости!
+          </div>
+          <p class="text-xs text-rose-300/90 mt-1">
+            Модель заблокирована. Дальнейшее инвестирование эмоций и ресурсов влечет предсказуемый деструктивный исход. Вы можете снять блокировку для гипотетического моделирования ниже.
+          </p>
+        </div>
+
+        <div class="space-y-3" id="dealbreakersContainer">
+          <!-- Item D1 -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700/80 transition gap-3">
+            <div class="space-y-0.5">
+              <div class="text-sm font-semibold text-white flex items-center gap-2">
+                <span>D1. Репродуктивный вектор</span>
+              </div>
+              <p class="text-xs text-slate-400">Совпадают ли фундаментальные взгляды на детей и примерные сроки (хочет/не хочет/когда)?</p>
+            </div>
+            <div class="flex items-center gap-2 self-end sm:self-center">
+              <label class="inline-flex items-center cursor-pointer select-none">
+                <input type="checkbox" id="db_d1" checked class="sr-only peer" onchange="triggerAutoCalc()">
+                <div class="w-14 h-7 bg-rose-950 border border-rose-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600 peer-checked:border-emerald-500 flex items-center justify-between px-1.5 text-[10px] font-bold text-white">
+                  <span>ДА</span>
+                  <span>НЕТ</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Item D2 -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700/80 transition gap-3">
+            <div class="space-y-0.5">
+              <div class="text-sm font-semibold text-white">D2. Формат союза и моногамия</div>
+              <p class="text-xs text-slate-400">Единое понимание верности, готовность к эксклюзивным парным отношениям без параллельных поисков.</p>
+            </div>
+            <div class="flex items-center gap-2 self-end sm:self-center">
+              <label class="inline-flex items-center cursor-pointer select-none">
+                <input type="checkbox" id="db_d2" checked class="sr-only peer" onchange="triggerAutoCalc()">
+                <div class="w-14 h-7 bg-rose-950 border border-rose-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600 peer-checked:border-emerald-500 flex items-center justify-between px-1.5 text-[10px] font-bold text-white">
+                  <span>ДА</span>
+                  <span>НЕТ</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Item D3 -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700/80 transition gap-3">
+            <div class="space-y-0.5">
+              <div class="text-sm font-semibold text-white">D3. Отсутствие тяжелых аддикций</div>
+              <p class="text-xs text-slate-400">Отсутствие патологической зависимости от наркотиков, алкоголя, азартных игр или шопоголизма с долгами.</p>
+            </div>
+            <div class="flex items-center gap-2 self-end sm:self-center">
+              <label class="inline-flex items-center cursor-pointer select-none">
+                <input type="checkbox" id="db_d3" checked class="sr-only peer" onchange="triggerAutoCalc()">
+                <div class="w-14 h-7 bg-rose-950 border border-rose-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600 peer-checked:border-emerald-500 flex items-center justify-between px-1.5 text-[10px] font-bold text-white">
+                  <span>ДА</span>
+                  <span>НЕТ</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Item D4 -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700/80 transition gap-3">
+            <div class="space-y-0.5">
+              <div class="text-sm font-semibold text-white">D4. Эмоциональная и юридическая свобода</div>
+              <p class="text-xs text-slate-400">Завершенные предыдущие отношения, отсутствие зависших неразведенных браков и эмоциональных качелей с бывшими.</p>
+            </div>
+            <div class="flex items-center gap-2 self-end sm:self-center">
+              <label class="inline-flex items-center cursor-pointer select-none">
+                <input type="checkbox" id="db_d4" checked class="sr-only peer" onchange="triggerAutoCalc()">
+                <div class="w-14 h-7 bg-rose-950 border border-rose-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600 peer-checked:border-emerald-500 flex items-center justify-between px-1.5 text-[10px] font-bold text-white">
+                  <span>ДА</span>
+                  <span>НЕТ</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Item D5 -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-slate-700/80 transition gap-3">
+            <div class="space-y-0.5">
+              <div class="text-sm font-semibold text-white">D5. Базовая психическая безопасность</div>
+              <p class="text-xs text-slate-400">Отсутствие физического и вербального насилия, жестокости, деструктивных нарциссических манипуляций.</p>
+            </div>
+            <div class="flex items-center gap-2 self-end sm:self-center">
+              <label class="inline-flex items-center cursor-pointer select-none">
+                <input type="checkbox" id="db_d5" checked class="sr-only peer" onchange="triggerAutoCalc()">
+                <div class="w-14 h-7 bg-rose-950 border border-rose-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600 peer-checked:border-emerald-500 flex items-center justify-between px-1.5 text-[10px] font-bold text-white">
+                  <span>ДА</span>
+                  <span>НЕТ</span>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-between pt-4 border-t border-slate-800">
+          <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+            <input type="checkbox" id="forceOverrideDealbreakers" onchange="triggerAutoCalc()" class="rounded bg-slate-950 border-slate-700 text-brand-600 focus:ring-0">
+            <span>Принудительно игнорировать стоп-факторы (экспериментальный расчет)</span>
+          </label>
+          <button onclick="goToStep(1)" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-brand-600/30 transition">
+            Перейти к 5 категориям
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 1: Weighted 5-Category Matrix -->
+    <section id="step-1" class="step-content hidden space-y-6">
+      
+      <!-- Category 1 -->
+      <div class="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 sm:p-6 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm">1</span>
+            <div>
+              <h3 class="text-base font-bold text-white">Ценностный вектор и картина мира</h3>
+              <p class="text-xs text-slate-400">Фундамент стратегического единства и долгосрочных целей</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-md text-xs font-mono bg-indigo-950 text-indigo-300 border border-indigo-800/50 font-semibold">Вес: 30%</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5">
+          <!-- Param C1.1 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Финансовая философия (труд, траты, долги)</span>
+              <span id="val_c1_1" class="font-mono font-bold text-brand-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Созидательный подход, адекватность потребления, отсутствие токсичных займов и паразитических ожиданий.</p>
+            <input type="range" min="1" max="10" value="8" id="c1_1" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c1_1'); triggerAutoCalc();">
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span>1-3: Хаос, долги, «все мне должны»</span>
+              <span>4-6: Бывают перекосы</span>
+              <span>7-8: Зрелое управление</span>
+              <span>9-10: Финансовая гармония</span>
+            </div>
+          </div>
+
+          <!-- Param C1.2 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Жизненная энергия и темп развития</span>
+              <span id="val_c1_2" class="font-mono font-bold text-brand-400 text-base">7/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Совпадение скоростей: стремление к профессиональному и личностному росту vs застой и апатия.</p>
+            <input type="range" min="1" max="10" value="7" id="c1_2" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c1_2'); triggerAutoCalc();">
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span>1-3: Тотальная стагнация</span>
+              <span>4-6: Переменный темп</span>
+              <span>7-8: Активный вектор</span>
+              <span>9-10: Взаимное ускорение</span>
+            </div>
+          </div>
+
+          <!-- Param C1.3 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Уважение к личным границам и автономии</span>
+              <span id="val_c1_3" class="font-mono font-bold text-brand-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Принятие вашего личного времени, работы, хобби и круга общения без удушающего контроля и ревности.</p>
+            <input type="range" min="1" max="10" value="8" id="c1_3" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c1_3'); triggerAutoCalc();">
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span>1-3: Контроль и сталкеринг</span>
+              <span>4-6: Ревность моментами</span>
+              <span>7-8: Зрелое доверие</span>
+              <span>9-10: Полная поддержка автономии</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Category 2 -->
+      <div class="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 sm:p-6 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-sm">2</span>
+            <div>
+              <h3 class="text-base font-bold text-white">Коммуникация и эмоциональный интеллект (EQ)</h3>
+              <p class="text-xs text-slate-400">Определяет стоимость и психологическую цену решения конфликтов</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-md text-xs font-mono bg-teal-950 text-teal-300 border border-teal-800/50 font-semibold">Вес: 25%</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5">
+          <!-- Param C2.1 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Экологичная конфликтология («словами через рот»)</span>
+              <span id="val_c2_1" class="font-mono font-bold text-teal-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Готовность садиться и обсуждать дискомфорт без пассивной агрессии, «игры в молчанку» и хлопанья дверьми.</p>
+            <input type="range" min="1" max="10" value="8" id="c2_1" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c2_1'); triggerAutoCalc();">
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span>1-3: Истерики, бойкоты, газлайтинг</span>
+              <span>4-6: Обиды с задержкой</span>
+              <span>7-8: Прямой диалог</span>
+              <span>9-10: Мастерство медиации</span>
+            </div>
+          </div>
+
+          <!-- Param C2.2 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Саморефлексия и признание неправоты</span>
+              <span id="val_c2_2" class="font-mono font-bold text-teal-400 text-base">7/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Способность сказать: «Я погорячилась, прости», вместо глухой психологической защиты и обвинения вас.</p>
+            <input type="range" min="1" max="10" value="7" id="c2_2" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c2_2'); triggerAutoCalc();">
+          </div>
+
+          <!-- Param C2.3 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Эмпатия и искренняя валидация чувств</span>
+              <span id="val_c2_3" class="font-mono font-bold text-teal-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Искренний интерес к вашему состоянию, способность услышать боль партнера без обесценивания («ой, нашел проблему»).</p>
+            <input type="range" min="1" max="10" value="8" id="c2_3" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c2_3'); triggerAutoCalc();">
+          </div>
+        </div>
+      </div>
+
+      <!-- Category 3 -->
+      <div class="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 sm:p-6 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center font-bold text-sm">3</span>
+            <div>
+              <h3 class="text-base font-bold text-white">Физическая и интимная совместимость</h3>
+              <p class="text-xs text-slate-400">Гормональный и эстетический базис привлекательности</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-md text-xs font-mono bg-rose-950 text-rose-300 border border-rose-800/50 font-semibold">Вес: 20%</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5">
+          <!-- Param C3.1 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Физическая и визуальная аттрактивность</span>
+              <span id="val_c3_1" class="font-mono font-bold text-rose-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Органика влечения: нравится запах, голос, эстетика движений, искреннее непреодолимое желание близости.</p>
+            <input type="range" min="1" max="10" value="8" id="c3_1" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c3_1'); triggerAutoCalc();">
+          </div>
+
+          <!-- Param C3.2 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Совпадение либидо и открытость в сексе</span>
+              <span id="val_c3_2" class="font-mono font-bold text-rose-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Схожая потребность в частоте контакта, отсутствие стыда и зажатости при обсуждении сексуальных фантазий.</p>
+            <input type="range" min="1" max="10" value="8" id="c3_2" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c3_2'); triggerAutoCalc();">
+          </div>
+
+          <!-- Param C3.3 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Здоровье, гигиена и забота о теле</span>
+              <span id="val_c3_3" class="font-mono font-bold text-rose-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Физический тонус, отношение к сну, гигиене, визитам к врачам, профилактике здоровья.</p>
+            <input type="range" min="1" max="10" value="8" id="c3_3" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c3_3'); triggerAutoCalc();">
+          </div>
+        </div>
+      </div>
+
+      <!-- Category 4 -->
+      <div class="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 sm:p-6 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm">4</span>
+            <div>
+              <h3 class="text-base font-bold text-white">Бытовая и рутинная совместимость</h3>
+              <p class="text-xs text-slate-400">Пространство совместного проживания без ежедневного стресса</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-md text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800/50 font-semibold">Вес: 15%</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5">
+          <!-- Param C4.1 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Стандарты порядка, чистоты и уюта</span>
+              <span id="val_c4_1" class="font-mono font-bold text-amber-400 text-base">7/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Схожесть порогов допустимого беспорядка. Отсутствие маниакального педантизма или патологической захламленности.</p>
+            <input type="range" min="1" max="10" value="7" id="c4_1" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c4_1'); triggerAutoCalc();">
+          </div>
+
+          <!-- Param C4.2 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Паттерны отдыха и биоритмы</span>
+              <span id="val_c4_2" class="font-mono font-bold text-amber-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Совпадение ритма сна/бодрствования и форматов отдыха: домоседство vs постоянные тусовки и гости.</p>
+            <input type="range" min="1" max="10" value="8" id="c4_2" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c4_2'); triggerAutoCalc();">
+          </div>
+        </div>
+      </div>
+
+      <!-- Category 5 -->
+      <div class="bg-slate-900/70 border border-slate-800/90 rounded-2xl p-5 sm:p-6 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold text-sm">5</span>
+            <div>
+              <h3 class="text-base font-bold text-white">Социальный круг и бэкграунд</h3>
+              <p class="text-xs text-slate-400">Внешняя среда и устойчивость к родительскому влиянию</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-md text-xs font-mono bg-sky-950 text-sky-300 border border-sky-800/50 font-semibold">Вес: 10%</span>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5">
+          <!-- Param C5.1 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Сепарация от родителей</span>
+              <span id="val_c5_1" class="font-mono font-bold text-sky-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">Автономия от мнения мамы/папы. Решения в паре принимаются между партнерами, а не на семейном совете ее родственников.</p>
+            <input type="range" min="1" max="10" value="8" id="c5_1" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c5_1'); triggerAutoCalc();">
+          </div>
+
+          <!-- Param C5.2 -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+            <div class="flex justify-between items-center text-sm">
+              <span class="font-semibold text-slate-200">Качество дружеского окружения</span>
+              <span id="val_c5_2" class="font-mono font-bold text-sky-400 text-base">8/10</span>
+            </div>
+            <p class="text-xs text-slate-400">«Скажи мне, кто твой друг»: зрелость, ценности и образ жизни людей, которыми она себя окружает.</p>
+            <input type="range" min="1" max="10" value="8" id="c5_2" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateSliderUI('c5_2'); triggerAutoCalc();">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center pt-3">
+        <button onclick="goToStep(0)" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
+          ← Назад к фильтрам
+        </button>
+        <button onclick="goToStep(2)" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-brand-600/30 transition">
+          К мультипликаторам динамики →
+        </button>
+      </div>
+    </section>
+
+    <!-- STEP 2: Dynamic Multipliers -->
+    <section id="step-2" class="step-content hidden space-y-6">
+      <div class="bg-gradient-to-br from-slate-900 to-slate-900/80 border border-slate-800 rounded-2xl p-5 sm:p-7 space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+          <div>
+            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+              <span>⚡</span> Динамические мультипликаторы (Проверка временем)
+            </h3>
+            <p class="text-xs sm:text-sm text-slate-400 mt-0.5">
+              Коэффициенты умножения (от 0.70 до 1.30), отражающие реальное поведение при длительном контакте.
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400">Учитывать в расчете:</span>
+            <input type="checkbox" id="enableMultipliersToggle" checked onchange="toggleMultipliersManual(); triggerAutoCalc();" class="rounded bg-slate-950 border-slate-700 text-brand-600 focus:ring-0">
+          </div>
+        </div>
+
+        <div id="multipliersCardList" class="space-y-4">
+          <!-- M1: Stress -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/90 space-y-2">
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="font-semibold text-sm text-slate-200">M1. Стресс-тест и поведение в кризисе</span>
+                <p class="text-xs text-slate-400">Срыв планов, опоздание на рейс, болезнь, форс-мажор. Включает ли поиск решений или выплескивает гнев на вас?</p>
+              </div>
+              <span id="val_m1" class="font-mono text-base font-bold text-brand-400 bg-brand-950/60 px-2.5 py-1 rounded border border-brand-800/40">×1.05</span>
+            </div>
+            <input type="range" min="0.70" max="1.30" step="0.05" value="1.05" id="m1" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateMultiplierUI('m1'); triggerAutoCalc();">
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span class="text-rose-400 font-medium">0.70 (Аффект, истерика)</span>
+              <span>1.00 (Норма)</span>
+              <span class="text-emerald-400 font-medium">1.30 (Железная выдержка и опора)</span>
+            </div>
+          </div>
+
+          <!-- M2: Gratitude -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/90 space-y-2">
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="font-semibold text-sm text-slate-200">M2. Баланс значимости и культура благодарности</span>
+                <p class="text-xs text-slate-400">Замечает ли вложенные вами усилия, время и заботу, или относится как к базовой обязанности мужчины?</p>
+              </div>
+              <span id="val_m2" class="font-mono text-base font-bold text-brand-400 bg-brand-950/60 px-2.5 py-1 rounded border border-brand-800/40">×1.10</span>
+            </div>
+            <input type="range" min="0.70" max="1.30" step="0.05" value="1.10" id="m2" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateMultiplierUI('m2'); triggerAutoCalc();">
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span class="text-rose-400 font-medium">0.70 (Потребительство)</span>
+              <span>1.00 (Нейтрально)</span>
+              <span class="text-emerald-400 font-medium">1.30 (Искренняя признательность)</span>
+            </div>
+          </div>
+
+          <!-- M3: Initiative -->
+          <div class="p-4 rounded-xl bg-slate-950/70 border border-slate-800/90 space-y-2">
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="font-semibold text-sm text-slate-200">M3. Проактивный встречный вклад</span>
+                <p class="text-xs text-slate-400">Отношения — это «игра в пас». Инициирует ли она встречи, заботится ли о вашем комфорте по своей воле?</p>
+              </div>
+              <span id="val_m3" class="font-mono text-base font-bold text-brand-400 bg-brand-950/60 px-2.5 py-1 rounded border border-brand-800/40">×1.00</span>
+            </div>
+            <input type="range" min="0.70" max="1.30" step="0.05" value="1.00" id="m3" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" oninput="updateMultiplierUI('m3'); triggerAutoCalc();">
+            <div class="flex justify-between text-[10px] text-slate-500">
+              <span class="text-rose-400 font-medium">0.70 (Пассивный потребитель)</span>
+              <span>1.00 (В балансе)</span>
+              <span class="text-emerald-400 font-medium">1.30 (Опережающая забота)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center pt-3 border-t border-slate-800">
+          <button onclick="goToStep(1)" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
+            ← Назад к базовым баллам
+          </button>
+          <button onclick="goToStep(3)" class="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-500 hover:from-brand-500 hover:to-indigo-400 text-white text-xs font-bold shadow-lg shadow-brand-600/30 transition flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Рассчитать и открыть Дашборд
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 3: Analytical Dashboard & Report -->
+    <section id="step-3" class="step-content hidden space-y-6">
+      
+      <!-- Top Action Bar (Print / Save / Export) -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 no-print">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">Кандидат:</span>
+          <span id="reportCandidateNameDisplay" class="text-sm font-bold text-white px-2.5 py-0.5 rounded bg-slate-800 border border-slate-700">Имя</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="saveCurrentProfile()" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-md shadow-indigo-600/20">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+            Сохранить в базу
+          </button>
+          <button onclick="window.print()" class="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition flex items-center gap-1.5 border border-slate-700">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            Экспорт / Печать
+          </button>
+        </div>
+      </div>
+
+      <!-- Executive Score & Verdict Card -->
+      <div id="verdictCard" class="print-card bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+        <div class="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-brand-600/10 blur-3xl pointer-events-none"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+          <!-- Big Score circle -->
+          <div class="flex flex-col items-center justify-center text-center p-4 border-b md:border-b-0 md:border-r border-slate-800">
+            <span class="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-1">Итоговый скоринг</span>
+            <div id="finalScoreDisplay" class="text-5xl sm:text-6xl font-black font-mono tracking-tight text-white mb-2">
+              0.00
+            </div>
+            <div id="verdictBadge" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-300">
+              Вычисление...
+            </div>
+            <div class="text-[11px] text-slate-500 mt-2 font-mono" id="scoreFormulaBreakdown">
+              Базовый 0.00 × Мультипликатор 1.00
+            </div>
+          </div>
+
+          <!-- Verdict Text & Explanation -->
+          <div class="md:col-span-2 space-y-3">
+            <h4 id="verdictTitle" class="text-xl font-bold text-white flex items-center gap-2">
+              Вердикт системы
+            </h4>
+            <p id="verdictDescription" class="text-sm text-slate-300 leading-relaxed">
+              Анализ завершен. Ознакомьтесь со сводными метриками категорий и списком выявленных факторов риска.
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 text-xs">
+              <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block text-[10px]">Стоп-факторы</span>
+                <span id="resDealbreakers" class="font-bold font-mono text-emerald-400">ПРОЙДЕНЫ</span>
+              </div>
+              <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block text-[10px]">Базовый вес</span>
+                <span id="resBaseScore" class="font-bold font-mono text-white">0.00 / 10</span>
+              </div>
+              <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                <span class="text-slate-400 block text-[10px]">Мультипликатор</span>
+                <span id="resMultiplier" class="font-bold font-mono text-brand-400">×1.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Row (Radar & Category Bars) -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Radar Chart Card -->
+        <div class="print-card bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col items-center">
+          <div class="w-full flex justify-between items-center mb-3">
+            <h4 class="text-sm font-bold text-white flex items-center gap-1.5">
+              <span>🕸️</span> Радар гармонии профиля
+            </h4>
+            <span class="text-[10px] text-slate-400 font-mono">Шкала 0-10</span>
+          </div>
+          <div class="relative w-full max-w-sm aspect-square flex items-center justify-center">
+            <canvas id="compatibilityRadar"></canvas>
+          </div>
+        </div>
+
+        <!-- Breakdown by 5 Category Progress Bars -->
+        <div class="print-card bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+          <h4 class="text-sm font-bold text-white flex items-center gap-1.5">
+            <span>📊</span> Взвешенный вклад по сферам
+          </h4>
+          <div class="space-y-3.5 pt-1" id="categoryBarsContainer">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Red Flags & Green Pillars Analysis -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Green Pillars -->
+        <div class="print-card bg-slate-900/80 border border-emerald-900/40 rounded-2xl p-5 shadow-xl space-y-3">
+          <div class="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Точки опоры и сильные стороны (≥ 8.0)
+          </div>
+          <ul id="strongPillarsList" class="space-y-2 text-xs text-slate-300">
+            <!-- Populated via JS -->
+          </ul>
+        </div>
+
+        <!-- Red Flags & Vulnerabilities -->
+        <div class="print-card bg-slate-900/80 border border-rose-900/40 rounded-2xl p-5 shadow-xl space-y-3">
+          <div class="flex items-center gap-2 text-rose-400 font-semibold text-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Зоны риска и потенциальные конфликты (≤ 6.0)
+          </div>
+          <ul id="riskFactorsList" class="space-y-2 text-xs text-slate-300">
+            <!-- Populated via JS -->
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Saved Profiles Modal -->
+  <div id="profilesModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+      <div class="px-5 py-4 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span>📁</span> Сохраненные оценки кандидаток
+        </h3>
+        <button onclick="closeProfilesModal()" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-3 flex-grow" id="savedProfilesList">
+        <!-- Rendered by JS -->
+      </div>
+
+      <div class="p-4 border-t border-slate-800 bg-slate-950 flex justify-between items-center text-xs">
+        <span class="text-slate-400">Данные хранятся локально в вашем браузере.</span>
+        <button onclick="clearAllSavedProfiles()" class="text-rose-400 hover:underline">Очистить все</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toastNotification" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs font-medium flex items-center gap-2 shadow-2xl">
+    <span id="toastIcon">✨</span>
+    <span id="toastMsg">Успешно</span>
+  </div>
+
+  <script>
+    // Configuration of weights and criteria structure
+    const MATRIX_CONFIG = {
+      dealbreakers: [
+        { id: 'db_d1', name: 'Репродуктивный вектор' },
+        { id: 'db_d2', name: 'Формат союза (моногамия)' },
+        { id: 'db_d3', name: 'Отсутствие аддикций' },
+        { id: 'db_d4', name: 'Эмоциональная свобода от бывших' },
+        { id: 'db_d5', name: 'Базовая психологическая безопасность' }
+      ],
+      categories: [
+        {
+          id: 'cat_values',
+          title: 'Ценности и цели',
+          weight: 0.30,
+          items: [
+            { id: 'c1_1', title: 'Финансовая философия', subWeight: 0.12 },
+            { id: 'c1_2', title: 'Жизненные амбиции и темп', subWeight: 0.10 },
+            { id: 'c1_3', title: 'Уважение к автономии', subWeight: 0.08 }
+          ]
+        },
+        {
+          id: 'cat_eq',
+          title: 'EQ и коммуникация',
+          weight: 0.25,
+          items: [
+            { id: 'c2_1', title: 'Экологичный диалог в споре', subWeight: 0.10 },
+            { id: 'c2_2', title: 'Саморефлексия и ошибки', subWeight: 0.08 },
+            { id: 'c2_3', title: 'Эмпатия и валидация чувств', subWeight: 0.07 }
+          ]
+        },
+        {
+          id: 'cat_physio',
+          title: 'Физиология и секс',
+          weight: 0.20,
+          items: [
+            { id: 'c3_1', title: 'Аттрактивность и влечение', subWeight: 0.08 },
+            { id: 'c3_2', title: 'Совпадение либидо', subWeight: 0.07 },
+            { id: 'c3_3', title: 'Здоровье и уход за собой', subWeight: 0.05 }
+          ]
+        },
+        {
+          id: 'cat_routine',
+          title: 'Быт и рутина',
+          weight: 0.15,
+          items: [
+            { id: 'c4_1', title: 'Порядок и уют', subWeight: 0.08 },
+            { id: 'c4_2', title: 'Биоритмы и паттерны отдыха', subWeight: 0.07 }
+          ]
+        },
+        {
+          id: 'cat_social',
+          title: 'Социальный круг',
+          weight: 0.10,
+          items: [
+            { id: 'c5_1', title: 'Сепарация от родителей', subWeight: 0.06 },
+            { id: 'c5_2', title: 'Качество окружения', subWeight: 0.04 }
+          ]
+        }
+      ],
+      multipliers: [
+        { id: 'm1', title: 'Поведение в стрессе' },
+        { id: 'm2', title: 'Благодарность и отдача' },
+        { id: 'm3', title: 'Проактивный вклад' }
+      ]
+    };
+
+    let radarChartInstance = null;
+    let currentStep = 0;
+
+    // Toast helper
+    function showToast(msg, icon = '✓') {
+      const toast = document.getElementById('toastNotification');
+      document.getElementById('toastMsg').innerText = msg;
+      document.getElementById('toastIcon').innerText = icon;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 2400);
+    }
+
+    // Step Switcher
+    function goToStep(stepIndex) {
+      currentStep = stepIndex;
+      document.querySelectorAll('.step-content').forEach((el, idx) => {
+        el.classList.toggle('hidden', idx !== stepIndex);
+      });
+      document.querySelectorAll('.step-btn').forEach((btn, idx) => {
+        if (idx === stepIndex) {
+          btn.className = 'step-btn flex items-center gap-2 px-3.5 py-2 rounded-xl transition whitespace-nowrap bg-brand-600/20 text-brand-300 border border-brand-500/40';
+        } else {
+          btn.className = 'step-btn flex items-center gap-2 px-3.5 py-2 rounded-xl transition whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent';
+        }
+      });
+      if (stepIndex === 3) {
+        triggerAutoCalc();
+        renderRadarChart();
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // UI Updates on sliders
+    function updateSliderUI(id) {
+      const val = document.getElementById(id).value;
+      const label = document.getElementById('val_' + id);
+      if (label) label.innerText = `${val}/10`;
+    }
+
+    function updateMultiplierUI(id) {
+      const val = parseFloat(document.getElementById(id).value).toFixed(2);
+      const label = document.getElementById('val_' + id);
+      if (label) label.innerText = `×${val}`;
+    }
+
+    function toggleStageMultiplier() {
+      const stage = document.getElementById('datingStage').value;
+      const toggle = document.getElementById('enableMultipliersToggle');
+      if (stage === 'early') {
+        toggle.checked = false;
+      } else {
+        toggle.checked = true;
+      }
+      toggleMultipliersManual();
+    }
+
+    function toggleMultipliersManual() {
+      const enabled = document.getElementById('enableMultipliersToggle').checked;
+      const card = document.getElementById('multipliersCardList');
+      if (enabled) {
+        card.classList.remove('opacity-40', 'pointer-events-none');
+      } else {
+        card.classList.add('opacity-40', 'pointer-events-none');
+      }
+    }
+
+    // Core Calculation Logic
+    function computeAssessment() {
+      // 1. Check Dealbreakers
+      let dealbreakersPassed = true;
+      MATRIX_CONFIG.dealbreakers.forEach(item => {
+        const checked = document.getElementById(item.id).checked;
+        if (!checked) dealbreakersPassed = false;
+      });
+
+      const forceOverride = document.getElementById('forceOverrideDealbreakers').checked;
+      const dealbreakerAlert = document.getElementById('dealbreakerAlert');
+      if (!dealbreakersPassed && !forceOverride) {
+        dealbreakerAlert.classList.remove('hidden');
+      } else {
+        dealbreakerAlert.classList.add('hidden');
+      }
+
+      // 2. Compute Weighted Base Score (0-10)
+      let weightedSum = 0;
+      let totalAssignedWeight = 0;
+      const categoryScores = [];
+      const criteriaScores = [];
+
+      MATRIX_CONFIG.categories.forEach(cat => {
+        let catScoreSum = 0;
+        let catSubWeights = 0;
+
+        cat.items.forEach(item => {
+          const val = parseFloat(document.getElementById(item.id).value);
+          weightedSum += val * item.subWeight;
+          totalAssignedWeight += item.subWeight;
+          catScoreSum += val * item.subWeight;
+          catSubWeights += item.subWeight;
+
+          criteriaScores.push({
+            id: item.id,
+            title: item.title,
+            score: val,
+            category: cat.title
+          });
+        });
+
+        // Normalized score for this specific category (0 - 10)
+        const normalizedCatScore = (catScoreSum / catSubWeights);
+        categoryScores.push({
+          title: cat.title,
+          score: normalizedCatScore,
+          weight: cat.weight
+        });
+      });
+
+      const baseScore = totalAssignedWeight > 0 ? (weightedSum / totalAssignedWeight) : 0;
+
+      // 3. Dynamic Multipliers
+      let effectiveMultiplier = 1.0;
+      const useMultipliers = document.getElementById('enableMultipliersToggle').checked;
+
+      if (useMultipliers) {
+        const m1 = parseFloat(document.getElementById('m1').value);
+        const m2 = parseFloat(document.getElementById('m2').value);
+        const m3 = parseFloat(document.getElementById('m3').value);
+        effectiveMultiplier = (m1 + m2 + m3) / 3;
+      }
+
+      // 4. Final Score
+      let finalScore = baseScore * effectiveMultiplier;
+      
+      // Cap between 0 and 10
+      if (finalScore > 10) finalScore = 10;
+      if (finalScore < 0) finalScore = 0;
+
+      // If dealbreakers failed and not overridden -> 0
+      const isDisqualified = (!dealbreakersPassed && !forceOverride);
+      if (isDisqualified) {
+        finalScore = 0.0;
+      }
+
+      return {
+        isDisqualified,
+        dealbreakersPassed,
+        baseScore,
+        effectiveMultiplier,
+        finalScore,
+        categoryScores,
+        criteriaScores
+      };
+    }
+
+    function triggerAutoCalc() {
+      const data = computeAssessment();
+      
+      // Live Header updates
+      const headerScore = document.getElementById('headerLiveScore');
+      const headerBadge = document.getElementById('headerStatusBadge');
+
+      headerScore.innerText = data.finalScore.toFixed(2);
+      
+      if (data.isDisqualified) {
+        headerScore.className = 'text-xl font-black font-mono text-rose-500';
+        headerBadge.innerText = 'ОТВОД (Dealbreaker)';
+        headerBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-rose-950 text-rose-300 border border-rose-800';
+      } else if (data.finalScore >= 9.0) {
+        headerScore.className = 'text-xl font-black font-mono text-emerald-400';
+        headerBadge.innerText = 'ЭТАЛОН (≥ 9.0)';
+        headerBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800';
+      } else if (data.finalScore >= 8.0) {
+        headerScore.className = 'text-xl font-black font-mono text-brand-400';
+        headerBadge.innerText = 'ВЫСОКИЙ ПОТЕНЦИАЛ';
+        headerBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-brand-950 text-brand-300 border border-brand-800';
+      } else if (data.finalScore >= 6.5) {
+        headerScore.className = 'text-xl font-black font-mono text-amber-400';
+        headerBadge.innerText = 'КОМПРОМИСС (6.5-7.9)';
+        headerBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-amber-950 text-amber-300 border border-amber-800';
+      } else {
+        headerScore.className = 'text-xl font-black font-mono text-rose-400';
+        headerBadge.innerText = 'ВЫСОКИЙ РИСК (< 6.5)';
+        headerBadge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-rose-950 text-rose-300 border border-rose-800';
+      }
+
+      // If on report page, update deep analytics
+      if (currentStep === 3) {
+        renderDashboard(data);
+      }
+    }
+
+    function renderDashboard(data) {
+      const candName = document.getElementById('candidateName').value || 'Кандидатка';
+      document.getElementById('reportCandidateNameDisplay').innerText = candName;
+      
+      const scoreDisplay = document.getElementById('finalScoreDisplay');
+      scoreDisplay.innerText = data.finalScore.toFixed(2);
+
+      const verdictTitle = document.getElementById('verdictTitle');
+      const verdictDesc = document.getElementById('verdictDescription');
+      const verdictBadge = document.getElementById('verdictBadge');
+      const scoreBreakdown = document.getElementById('scoreFormulaBreakdown');
+
+      scoreBreakdown.innerText = `Базовый: ${data.baseScore.toFixed(2)} × Мультипликатор: ${data.effectiveMultiplier.toFixed(2)}`;
+      document.getElementById('resBaseScore').innerText = `${data.baseScore.toFixed(2)} / 10`;
+      document.getElementById('resMultiplier').innerText = `×${data.effectiveMultiplier.toFixed(2)}`;
+      
+      if (data.dealbreakersPassed) {
+        document.getElementById('resDealbreakers').innerText = 'ПРОЙДЕНЫ';
+        document.getElementById('resDealbreakers').className = 'font-bold font-mono text-emerald-400';
+      } else {
+        document.getElementById('resDealbreakers').innerText = 'ПРОВАЛЕНЫ';
+        document.getElementById('resDealbreakers').className = 'font-bold font-mono text-rose-500';
+      }
+
+      // Verdict Classification
+      if (data.isDisqualified) {
+        verdictTitle.innerHTML = '<span class="text-rose-500">❌ Не рекомендовано: Сработал Dealbreaker</span>';
+        verdictDesc.innerText = 'В отношениях присутствует непреодолимый стоп-фактор (аддикция, расхождение по детям, эмоциональная связь с бывшим или токсичность). Долгосрочные вложения приведут к болезненному разрыву.';
+        verdictBadge.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-950 text-rose-300 border border-rose-700';
+        verdictBadge.innerText = 'Дисквалификация';
+      } else if (data.finalScore >= 9.0) {
+        verdictTitle.innerHTML = '<span class="text-emerald-400">💎 Эталонная совместимость (Top Tier)</span>';
+        verdictDesc.innerText = 'Редкое и гармоничное сочетание фундаментальных ценностей, эмоционального интеллекта и взаимного влечения. Прекрасный базис для семьи и совместных проектов.';
+        verdictBadge.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-700';
+        verdictBadge.innerText = 'Превосходный мэтч';
+      } else if (data.finalScore >= 8.0) {
+        verdictTitle.innerHTML = '<span class="text-brand-400">⭐ Высокий партнерский потенциал</span>';
+        verdictDesc.innerText = 'Уверенная совместимость по главным векторам. Возникающие разногласия легко преодолеваются при помощи экологичного открытого диалога.';
+        verdictBadge.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-brand-950 text-brand-300 border border-brand-700';
+        verdictBadge.innerText = 'Рекомендовано';
+      } else if (data.finalScore >= 6.5) {
+        verdictTitle.innerHTML = '<span class="text-amber-400">⚠️ Зона постоянных компромиссов</span>';
+        verdictDesc.innerText = 'Отношения возможны, но потребуют регулярных эмоциональных уступок и работы над шероховатостями. Высокая вероятность трений в быту или коммуникации.';
+        verdictBadge.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-950 text-amber-300 border border-amber-700';
+        verdictBadge.innerText = 'Удовлетворительно';
+      } else {
+        verdictTitle.innerHTML = '<span class="text-rose-400">🛑 Высокий риск деструктивных отношений</span>';
+        verdictDesc.innerText = 'Балл ниже критического минимума (6.5). Совокупная стоимость решения конфликтов и психологический стресс превысят положительные эмоции.';
+        verdictBadge.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-950 text-rose-300 border border-rose-700';
+        verdictBadge.innerText = 'Высокий риск';
+      }
+
+      // Render 5 Category Bars
+      const barsBox = document.getElementById('categoryBarsContainer');
+      barsBox.innerHTML = '';
+      data.categoryScores.forEach(c => {
+        const pct = Math.min(100, Math.max(0, (c.score / 10) * 100));
+        let colorClass = 'bg-brand-500';
+        if (c.score < 6.5) colorClass = 'bg-rose-500';
+        else if (c.score < 8.0) colorClass = 'bg-amber-500';
+        else colorClass = 'bg-emerald-500';
+
+        const row = document.createElement('div');
+        row.className = 'space-y-1';
+        row.innerHTML = `
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-300 font-medium">${c.title} <span class="text-slate-500 text-[10px]">(${(c.weight * 100)}%)</span></span>
+            <span class="font-mono font-bold text-slate-200">${c.score.toFixed(1)} / 10</span>
+          </div>
+          <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+            <div class="h-full rounded-full transition-all duration-500 ${colorClass}" style="width: ${pct}%"></div>
+          </div>
+        `;
+        barsBox.appendChild(row);
+      });
+
+      // Render Strengths & Risks lists
+      const strongList = document.getElementById('strongPillarsList');
+      const riskList = document.getElementById('riskFactorsList');
+      strongList.innerHTML = '';
+      riskList.innerHTML = '';
+
+      const strongs = data.criteriaScores.filter(x => x.score >= 8);
+      const risks = data.criteriaScores.filter(x => x.score <= 6);
+
+      if (strongs.length === 0) {
+        strongList.innerHTML = '<li class="text-slate-500 italic">Ярко выраженных сильных опорных точек не выявлено.</li>';
+      } else {
+        strongs.forEach(s => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center justify-between p-2 rounded-lg bg-emerald-950/20 border border-emerald-900/30';
+          li.innerHTML = `<span>${s.title} (${s.category})</span><span class="font-mono font-bold text-emerald-400">${s.score}/10</span>`;
+          strongList.appendChild(li);
+        });
+      }
+
+      if (risks.length === 0) {
+        riskList.innerHTML = '<li class="text-slate-500 italic">Критических просадок по шкале не зафиксировано.</li>';
+      } else {
+        risks.forEach(r => {
+          const li = document.createElement('li');
+          li.className = 'flex items-center justify-between p-2 rounded-lg bg-rose-950/20 border border-rose-900/30';
+          li.innerHTML = `<span>${r.title}</span><span class="font-mono font-bold text-rose-400">${r.score}/10</span>`;
+          riskList.appendChild(li);
+        });
+      }
+
+      renderRadarChart(data.categoryScores);
+    }
+
+    function renderRadarChart(categoryScores) {
+      if (!categoryScores) {
+        const d = computeAssessment();
+        categoryScores = d.categoryScores;
+      }
+      const ctx = document.getElementById('compatibilityRadar');
+      if (!ctx) return;
+
+      const labels = categoryScores.map(c => c.title);
+      const values = categoryScores.map(c => parseFloat(c.score.toFixed(1)));
+
+      if (radarChartInstance) {
+        radarChartInstance.destroy();
+      }
+
+      radarChartInstance = new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Уровень совместимости',
+            data: values,
+            fill: true,
+            backgroundColor: 'rgba(139, 92, 246, 0.25)',
+            borderColor: '#8b5cf6',
+            pointBackgroundColor: '#a78bfa',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: '#8b5cf6',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            r: {
+              angleLines: { color: 'rgba(51, 65, 85, 0.4)' },
+              grid: { color: 'rgba(51, 65, 85, 0.4)' },
+              pointLabels: {
+                color: '#94a3b8',
+                font: { size: 11, family: 'Inter' }
+              },
+              ticks: {
+                display: false,
+                stepSize: 2,
+                min: 0,
+                max: 10
+              },
+              suggestedMin: 0,
+              suggestedMax: 10
+            }
+          }
+        }
+      });
+    }
+
+    // Presets loader
+    function loadPreset(type) {
+      if (type === 'ideal') {
+        document.getElementById('candidateName').value = 'Образцовая кандидатка';
+        MATRIX_CONFIG.dealbreakers.forEach(d => document.getElementById(d.id).checked = true);
+        document.getElementById('forceOverrideDealbreakers').checked = false;
+        
+        // High scores
+        ['c1_1', 'c1_2', 'c1_3', 'c2_1', 'c2_2', 'c2_3', 'c3_1', 'c3_2', 'c3_3', 'c4_1', 'c4_2', 'c5_1', 'c5_2'].forEach(id => {
+          document.getElementById(id).value = 9;
+          updateSliderUI(id);
+        });
+        document.getElementById('m1').value = 1.15; updateMultiplierUI('m1');
+        document.getElementById('m2').value = 1.20; updateMultiplierUI('m2');
+        document.getElementById('m3').value = 1.15; updateMultiplierUI('m3');
+        showToast('Загружен эталонный пресет (9.0+)', '💎');
+      } else if (type === 'risky') {
+        document.getElementById('candidateName').value = 'Сомнительный контакт';
+        document.getElementById('db_d1').checked = true;
+        document.getElementById('db_d2').checked = true;
+        document.getElementById('db_d3').checked = true;
+        document.getElementById('db_d4').checked = false; // Dealbreaker!
+        document.getElementById('db_d5').checked = true;
+        document.getElementById('forceOverrideDealbreakers').checked = false;
+
+        document.getElementById('c1_1').value = 4; updateSliderUI('c1_1');
+        document.getElementById('c1_2').value = 5; updateSliderUI('c1_2');
+        document.getElementById('c1_3').value = 3; updateSliderUI('c1_3');
+        document.getElementById('c2_1').value = 4; updateSliderUI('c2_1');
+        document.getElementById('c2_2').value = 3; updateSliderUI('c2_2');
+        document.getElementById('c2_3').value = 4; updateSliderUI('c2_3');
+        document.getElementById('c3_1').value = 8; updateSliderUI('c3_1');
+        document.getElementById('c3_2').value = 7; updateSliderUI('c3_2');
+        document.getElementById('c3_3').value = 6; updateSliderUI('c3_3');
+        document.getElementById('c4_1').value = 5; updateSliderUI('c4_1');
+        document.getElementById('c4_2').value = 4; updateSliderUI('c4_2');
+        document.getElementById('c5_1').value = 3; updateSliderUI('c5_1');
+        document.getElementById('c5_2').value = 4; updateSliderUI('c5_2');
+
+        document.getElementById('m1').value = 0.85; updateMultiplierUI('m1');
+        document.getElementById('m2').value = 0.80; updateMultiplierUI('m2');
+        document.getElementById('m3').value = 0.80; updateMultiplierUI('m3');
+        showToast('Загружен высокорисковый сценарий', '⚠️');
+      }
+      triggerAutoCalc();
+    }
+
+    function resetAllData() {
+      document.getElementById('candidateName').value = '';
+      MATRIX_CONFIG.dealbreakers.forEach(d => document.getElementById(d.id).checked = true);
+      document.getElementById('forceOverrideDealbreakers').checked = false;
+      ['c1_1', 'c1_2', 'c1_3', 'c2_1', 'c2_2', 'c2_3', 'c3_1', 'c3_2', 'c3_3', 'c4_1', 'c4_2', 'c5_1', 'c5_2'].forEach(id => {
+        document.getElementById(id).value = 7;
+        updateSliderUI(id);
+      });
+      document.getElementById('m1').value = 1.00; updateMultiplierUI('m1');
+      document.getElementById('m2').value = 1.00; updateMultiplierUI('m2');
+      document.getElementById('m3').value = 1.00; updateMultiplierUI('m3');
+      triggerAutoCalc();
+      showToast('Форма сброшена', '🔄');
+    }
+
+    // LocalStorage Management
+    const STORAGE_KEY = 'pmm_saved_profiles_v1';
+
+    function getSavedProfiles() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function updateSavedBadge() {
+      const list = getSavedProfiles();
+      document.getElementById('savedCountBadge').innerText = list.length;
+    }
+
+    function saveCurrentProfile() {
+      const name = document.getElementById('candidateName').value.trim() || 'Без имени';
+      const data = computeAssessment();
+      
+      const formState = {};
+      MATRIX_CONFIG.dealbreakers.forEach(d => formState[d.id] = document.getElementById(d.id).checked);
+      MATRIX_CONFIG.categories.forEach(c => c.items.forEach(i => formState[i.id] = document.getElementById(i.id).value));
+      MATRIX_CONFIG.multipliers.forEach(m => formState[m.id] = document.getElementById(m.id).value);
+
+      const profile = {
+        id: 'prof_' + Date.now(),
+        date: new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' }),
+        name: name,
+        score: data.finalScore.toFixed(2),
+        isDisqualified: data.isDisqualified,
+        formState: formState
+      };
+
+      const profiles = getSavedProfiles();
+      profiles.unshift(profile);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+      updateSavedBadge();
+      showToast(`Профиль "${name}" сохранен`, '💾');
+    }
+
+    function openProfilesModal() {
+      const modal = document.getElementById('profilesModal');
+      const listContainer = document.getElementById('savedProfilesList');
+      const profiles = getSavedProfiles();
+      listContainer.innerHTML = '';
+
+      if (profiles.length === 0) {
+        listContainer.innerHTML = `
+          <div class="text-center py-10 text-slate-500 text-xs">
+            Нет сохраненных оценок. Заполните тест и нажмите «Сохранить в базу».
+          </div>
+        `;
+      } else {
+        profiles.forEach(p => {
+          const item = document.createElement('div');
+          item.className = 'flex items-center justify-between p-3.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition';
+          item.innerHTML = `
+            <div>
+              <div class="text-sm font-semibold text-white flex items-center gap-2">
+                ${p.name}
+                ${p.isDisqualified ? '<span class="text-[10px] bg-rose-950 text-rose-300 px-2 py-0.5 rounded border border-rose-800">Стоп</span>' : ''}
+              </div>
+              <div class="text-xs text-slate-500">${p.date}</div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-mono font-bold text-base ${parseFloat(p.score) >= 8 ? 'text-brand-400' : parseFloat(p.score) >= 6.5 ? 'text-amber-400' : 'text-rose-400'}">${p.score}</span>
+              <button onclick="loadSavedProfile('${p.id}')" class="px-2.5 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-200">
+                Загрузить
+              </button>
+              <button onclick="deleteProfile('${p.id}')" class="text-slate-500 hover:text-rose-400 p-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          `;
+          listContainer.appendChild(item);
+        });
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeProfilesModal() {
+      const modal = document.getElementById('profilesModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function loadSavedProfile(id) {
+      const profiles = getSavedProfiles();
+      const match = profiles.find(x => x.id === id);
+      if (!match) return;
+
+      document.getElementById('candidateName').value = match.name;
+      Object.keys(match.formState).forEach(key => {
+        const el = document.getElementById(key);
+        if (el) {
+          if (el.type === 'checkbox') {
+            el.checked = match.formState[key];
+          } else {
+            el.value = match.formState[key];
+            if (key.startsWith('c')) updateSliderUI(key);
+            if (key.startsWith('m')) updateMultiplierUI(key);
+          }
+        }
+      });
+      closeProfilesModal();
+      triggerAutoCalc();
+      goToStep(3);
+      showToast(`Профиль "${match.name}" загружен`, '📂');
+    }
+
+    function deleteProfile(id) {
+      let profiles = getSavedProfiles();
+      profiles = profiles.filter(x => x.id !== id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+      openProfilesModal();
+      updateSavedBadge();
+    }
+
+    function clearAllSavedProfiles() {
+      localStorage.removeItem(STORAGE_KEY);
+      openProfilesModal();
+      updateSavedBadge();
+      showToast('Все профили удалены');
+    }
+
+    // Bootstrap app
+    window.addEventListener('DOMContentLoaded', () => {
+      // Sync sliders UI
+      ['c1_1', 'c1_2', 'c1_3', 'c2_1', 'c2_2', 'c2_3', 'c3_1', 'c3_2', 'c3_3', 'c4_1', 'c4_2', 'c5_1', 'c5_2'].forEach(id => {
+        updateSliderUI(id);
+      });
+      ['m1', 'm2', 'm3'].forEach(id => {
+        updateMultiplierUI(id);
+      });
+      updateSavedBadge();
+      triggerAutoCalc();
+    });
+  </script>
+</body>
+</html>
